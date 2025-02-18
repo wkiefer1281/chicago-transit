@@ -34,3 +34,4 @@ setuptools==75.8.0
 six==1.17.0
 tzdata==2025.1
 urllib3==2.3.0
+functions-framework==3.*

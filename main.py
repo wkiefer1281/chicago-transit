@@ -8,8 +8,8 @@ load_dotenv()
 
 def train_locations(cta_client: CTAClient) -> pd.DataFrame:
 
-    all_location_response = cta_client.locations([route for route in Route])
-    df = all_location_response.to_frame()
+    location_data = cta_client.locations([route for route in Route])
+    df = location_data.to_frame()
 
     return df
 
