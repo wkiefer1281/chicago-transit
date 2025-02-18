@@ -20,5 +20,5 @@ def main():
     pandas_gbq.to_gbq(df, "chicago_transit.train_locations", project_id=project_id, if_exists="replace")
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    main()
 
