@@ -2,8 +2,6 @@ from dotenv import load_dotenv
 from cta.client import CTAClient, Route
 from cta.stations import Stations
 
-load_dotenv()
-
 def train_endpoints_example(cta_client: CTAClient) -> None:
     damen_blue_line_mapid = 40590
 
@@ -53,6 +51,7 @@ def station_example(stations: Stations) -> None:
 
 
 if __name__ == "__main__":
+    load_dotenv()
     cta_client = CTAClient()
 
     train_endpoints_example(cta_client=cta_client)

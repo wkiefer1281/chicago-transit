@@ -1,4 +1,3 @@
-from dotenv import load_dotenv
 import pandas_gbq
 from flask import Flask
 from cta.client import CTAClient
@@ -8,8 +7,7 @@ app = Flask(__name__)
 
 @app.route("/")
 def main():
-    # get environment variables and get CTA client
-    load_dotenv()
+    # get CTA client
     cta_client = CTAClient()
 
     # call scripts
