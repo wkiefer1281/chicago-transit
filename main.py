@@ -1,11 +1,7 @@
 import pandas_gbq
-from flask import Flask
 from cta.client import CTAClient
 from scripts.scripts import train_locations
 
-app = Flask(__name__)
-
-@app.route("/")
 def main():
     # get CTA client
     cta_client = CTAClient()
