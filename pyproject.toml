@@ -1,0 +1,27 @@
+[project]
+name = "chicago-transit"
+version = "0.1.0"
+description = "Add your description here"
+dependencies = [
+    "python-dotenv>=1.1.0",
+    "pandas>=2.3.0",
+    "numpy>=2.3.0",
+    "pandas-gbq>=0.29.1",
+    "sodapy>=2.2.0",
+]
+readme = "README.md"
+requires-python = ">= 3.8"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.rye]
+managed = true
+dev-dependencies = []
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/chicago_transit"]
