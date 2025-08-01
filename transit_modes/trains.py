@@ -2,9 +2,16 @@
 import xml.etree.ElementTree as ET
 import pandas as pd
 from datetime import datetime
-from cta.oauth import get_api_keys
-from cta.chicago_api import get_station_names
 import requests
+from dotenv import load_dotenv
+import os
+from transit_modes.chicago_api import get_station_names
+
+# Load environment variables from .env file
+load_dotenv()
+
+# Retrieve API keys from .env file
+cta_train_api_key = os.getenv('CTA_TRAIN_API_KEY')
 
 # Mapping for route identifiers to full color names
 route_map = {
@@ -28,8 +35,17 @@ def get_station_name(station_id):
     # Return the station name or 'Unknown' if the station_id doesn't exist
     return station_id_to_name.get(station_id, "Unknown Station")
 
+# Helper function to convert time string to datetime in the format "YYYYMMDD HH:MM:SS"
+def convert_to_datetime(t: str) -> datetime | None:
+    for fmt in ("%Y%m%d %H:%M:%S", "%Y%m%d %H:%M"):
+        try:
+            dt = datetime.strptime(t, fmt)
+            return dt.astimezone()  # Converts to system local timezone
+        except (ValueError, TypeError):
+            continue
+    return None
+
 def fetch_train_locations():
-    cta_train_api_key, _ = get_api_keys()  # Load API keys from oauth.py
 
     url = "http://lapi.transitchicago.com/api/1.0/ttpositions.aspx"
     routes = ["Red", "Blue", "Brn", "G", "Org", "P", "Pink", "Y"]
@@ -42,15 +58,7 @@ def fetch_train_locations():
 
     response = requests.get(url, params=params)  # Send the request
     response.raise_for_status()  # Raise an error if the request fails
-    return response.text  # Return the raw XML response
-
-# Helper function to convert time string to datetime in the format "YYYYMMDD HH:MM:SS"
-def convert_to_datetime(time_str):
-    try:
-        return datetime.strptime(time_str, "%Y%m%d %H:%M:%S")
-    except ValueError:
-        return None  # Return None if the time format is invalid or missing
-    
+    return response.text  # Return the raw XML response   
 
 def parse_train_locations(xml_data):
     # Parse the XML response
