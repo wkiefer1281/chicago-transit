@@ -1,3 +1,4 @@
+# cta_buses.py
 import requests
 import pandas as pd
 from datetime import datetime
@@ -5,6 +6,8 @@ from itertools import islice
 from typing import Generator
 from dotenv import load_dotenv
 import os
+
+BASE_URL = "https://www.ctabustracker.com/bustime/api/v3"
 
 # Load environment variables from .env file
 load_dotenv()
@@ -24,7 +27,7 @@ def convert_to_datetime(t: str) -> datetime | None:
 
 def fetch_bus_routes() -> pd.DataFrame:
 
-    url = "https://www.ctabustracker.com/bustime/api/v3/getroutes"
+    url = f"{BASE_URL}/getroutes"
     params = {
         "key": cta_bus_api_key,
         "format": "json"
@@ -48,8 +51,9 @@ def fetch_bus_routes() -> pd.DataFrame:
     ])
 
 def fetch_bus_locations(routes: list[str] = None, time_resolution: str = "s") -> pd.DataFrame:
+    """Fetch current vehicle positions."""
 
-    url = "https://www.ctabustracker.com/bustime/api/v3/getvehicles"
+    url = f"{BASE_URL}/getvehicles"
     params = {
         "key": cta_bus_api_key,
         "format": "json",

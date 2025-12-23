@@ -1,11 +1,13 @@
-# trains.py
+# cta_trains.py
 import xml.etree.ElementTree as ET
 import pandas as pd
 from datetime import datetime
 import requests
 from dotenv import load_dotenv
 import os
-from transit_modes.chicago_api import get_station_names
+from transit_modes.chicago_data_portal import fetch_cta_station_names
+
+BASE_URL = "http://lapi.transitchicago.com/api/1.0"
 
 # Load environment variables from .env file
 load_dotenv()
@@ -26,7 +28,7 @@ route_map = {
 }
 
 # Get the station names from the DataFrame
-station_names_df = get_station_names()
+station_names_df = fetch_cta_station_names()
 
 # Create a dictionary for fast lookup (station_id -> station_name)
 station_id_to_name = pd.Series(station_names_df.stop_name.values, index=station_names_df.stop_id).to_dict()
@@ -46,8 +48,8 @@ def convert_to_datetime(t: str) -> datetime | None:
     return None
 
 def fetch_train_locations():
-
-    url = "http://lapi.transitchicago.com/api/1.0/ttpositions.aspx"
+    """Fetch current vehicle locations."""
+    url = f"{BASE_URL}/ttpositions.aspx"
     routes = ["Red", "Blue", "Brn", "G", "Org", "P", "Pink", "Y"]
     routes_param = ",".join(routes)
 
@@ -58,9 +60,8 @@ def fetch_train_locations():
 
     response = requests.get(url, params=params)  # Send the request
     response.raise_for_status()  # Raise an error if the request fails
-    return response.text  # Return the raw XML response   
+    xml_data = response.text  # Return the raw XML response   
 
-def parse_train_locations(xml_data):
     # Parse the XML response
     root = ET.fromstring(xml_data)
     trains = []
