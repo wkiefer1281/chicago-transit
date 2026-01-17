@@ -47,14 +47,14 @@ steps:
           gcloud scheduler jobs update http "${_SCHEDULER_JOB_NAME}" \
             --location "${_REGION}" \
             --schedule "${_SCHEDULE}" \
-            --uri "${URI}" \
+            --uri "$${URI}" \
             --http-method POST \
             --oidc-service-account-email "${_SCHEDULER_SA}"
         else
           gcloud scheduler jobs create http "${_SCHEDULER_JOB_NAME}" \
             --location "${_REGION}" \
             --schedule "${_SCHEDULE}" \
-            --uri "${URI}" \
+            --uri "$${URI}" \
             --http-method POST \
             --oidc-service-account-email "${_SCHEDULER_SA}"
         fi
