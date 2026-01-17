@@ -1,10 +1,10 @@
 substitutions:
   _REGION: us-central1
-  _IMAGE: gcr.io/$PROJECT_ID/chicago-transit
+  _IMAGE: gcr.io/${PROJECT_ID}/chicago-transit
   _JOB_NAME: chicago-transit-job
   _SCHEDULE: "0 * * * *"
   _SCHEDULER_JOB_NAME: chicago-transit-schedule
-  _SCHEDULER_SA: scheduler-invoker@$PROJECT_ID.iam.gserviceaccount.com
+  _SCHEDULER_SA: scheduler-invoker@${PROJECT_ID}.iam.gserviceaccount.com
   _SECRET_JSON: projects/655831717805/secrets/chicago-transit-secret:latest
 
 steps:
