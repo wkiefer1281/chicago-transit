@@ -10,14 +10,28 @@
 #   universal: false
 
 -e file:.
+altair==6.0.0
+    # via streamlit
+attrs==25.4.0
+    # via jsonschema
+    # via referencing
+blinker==1.9.0
+    # via streamlit
 cachetools==5.5.2
     # via google-auth
+    # via streamlit
 certifi==2025.6.15
     # via requests
 charset-normalizer==3.4.2
     # via requests
+click==8.3.1
+    # via streamlit
 db-dtypes==1.4.3
     # via pandas-gbq
+gitdb==4.0.12
+    # via gitpython
+gitpython==3.1.45
+    # via streamlit
 google-api-core==2.25.1
     # via google-cloud-bigquery
     # via google-cloud-core
@@ -52,23 +66,41 @@ gtfs-realtime-bindings==2.0.0
     # via chicago-transit
 idna==3.10
     # via requests
+jinja2==3.1.6
+    # via altair
+    # via pydeck
+jsonschema==4.25.1
+    # via altair
+jsonschema-specifications==2025.9.1
+    # via jsonschema
+markupsafe==3.0.3
+    # via jinja2
+narwhals==2.14.0
+    # via altair
 numpy==2.3.0
     # via chicago-transit
     # via db-dtypes
     # via pandas
     # via pandas-gbq
+    # via pydeck
+    # via streamlit
 oauthlib==3.3.0
     # via requests-oauthlib
 packaging==25.0
+    # via altair
     # via db-dtypes
     # via google-cloud-bigquery
     # via pandas-gbq
+    # via streamlit
 pandas==2.3.0
     # via chicago-transit
     # via db-dtypes
     # via pandas-gbq
+    # via streamlit
 pandas-gbq==0.29.1
     # via chicago-transit
+pillow==12.0.0
+    # via streamlit
 proto-plus==1.26.1
     # via google-api-core
 protobuf==6.31.1
@@ -77,9 +109,11 @@ protobuf==6.31.1
     # via grpcio-status
     # via gtfs-realtime-bindings
     # via proto-plus
+    # via streamlit
 pyarrow==20.0.0
     # via db-dtypes
     # via pandas-gbq
+    # via streamlit
 pyasn1==0.6.1
     # via pyasn1-modules
     # via rsa
@@ -87,6 +121,9 @@ pyasn1-modules==0.4.2
     # via google-auth
 pydata-google-auth==1.9.1
     # via pandas-gbq
+pydeck==0.9.1
+    # via chicago-transit
+    # via streamlit
 python-dateutil==2.9.0.post0
     # via google-cloud-bigquery
     # via pandas
@@ -94,13 +131,20 @@ python-dotenv==1.1.0
     # via chicago-transit
 pytz==2025.2
     # via pandas
+referencing==0.37.0
+    # via jsonschema
+    # via jsonschema-specifications
 requests==2.32.4
     # via google-api-core
     # via google-cloud-bigquery
     # via requests-oauthlib
     # via sodapy
+    # via streamlit
 requests-oauthlib==2.0.0
     # via google-auth-oauthlib
+rpds-py==0.30.0
+    # via jsonschema
+    # via referencing
 rsa==4.9.1
     # via google-auth
 setuptools==80.9.0
@@ -108,9 +152,25 @@ setuptools==80.9.0
     # via pydata-google-auth
 six==1.17.0
     # via python-dateutil
+smmap==5.0.2
+    # via gitdb
 sodapy==2.2.0
     # via chicago-transit
+streamlit==1.52.2
+    # via chicago-transit
+tenacity==9.1.2
+    # via streamlit
+toml==0.10.2
+    # via streamlit
+tornado==6.5.4
+    # via streamlit
+typing-extensions==4.15.0
+    # via altair
+    # via referencing
+    # via streamlit
 tzdata==2025.2
     # via pandas
 urllib3==2.5.0
     # via requests
+watchdog==6.0.0
+    # via streamlit

@@ -1,26 +1,63 @@
+substitutions:
+  _REGION: us-central1
+  _IMAGE: gcr.io/$PROJECT_ID/chicago-transit
+  _JOB_NAME: chicago-transit-job
+  _SCHEDULE: "0 * * * *"
+  _SCHEDULER_JOB_NAME: chicago-transit-schedule
+  _SCHEDULER_SA: scheduler-invoker@$PROJECT_ID.iam.gserviceaccount.com
+  _SECRET_JSON: projects/655831717805/secrets/chicago-transit-secret:latest
+
 steps:
   # Step 1: Build the Docker image from Dockerfile
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['build', '-t', 'gcr.io/$PROJECT_ID/chicago-transit', '.']
+    args: ['build', '-t', '$_IMAGE', '.']
 
   # Step 2: Push the image to Google Container Registry (or Artifact Registry)
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['push', 'gcr.io/$PROJECT_ID/chicago-transit']
+    args: ['push', '$_IMAGE']
 
-  # Step 3: Deploy to Cloud Run
+  # Step 3: Deploy a Cloud Run Job (batch workload)
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: 'gcloud'
     args:
       - 'run'
+      - 'jobs'
       - 'deploy'
-      - 'chicago-transit-service'
+      - '$_JOB_NAME'
       - '--image'
-      - 'gcr.io/$PROJECT_ID/chicago-transit'
+      - '$_IMAGE'
       - '--region'
-      - 'us-central1'
-      - '--platform'
-      - 'managed'
-      - '--allow-unauthenticated'  # or use --no-allow-unauthenticated for private
+      - '$_REGION'
+      - '--tasks'
+      - '1'
+      - '--max-retries'
+      - '1'
+      - '--set-secrets'
+      - 'CHICAGO_TRANSIT_SECRET_JSON=$_SECRET_JSON'
+
+  # Step 4: Create or update a Cloud Scheduler job to invoke the Cloud Run Job
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        set -euo pipefail
+        URI="https://run.googleapis.com/apis/run.googleapis.com/v1/namespaces/${PROJECT_ID}/jobs/${_JOB_NAME}:run"
+        if gcloud scheduler jobs describe "${_SCHEDULER_JOB_NAME}" --location "${_REGION}" >/dev/null 2>&1; then
+          gcloud scheduler jobs update http "${_SCHEDULER_JOB_NAME}" \
+            --location "${_REGION}" \
+            --schedule "${_SCHEDULE}" \
+            --uri "${URI}" \
+            --http-method POST \
+            --oidc-service-account-email "${_SCHEDULER_SA}"
+        else
+          gcloud scheduler jobs create http "${_SCHEDULER_JOB_NAME}" \
+            --location "${_REGION}" \
+            --schedule "${_SCHEDULE}" \
+            --uri "${URI}" \
+            --http-method POST \
+            --oidc-service-account-email "${_SCHEDULER_SA}"
+        fi
 
 images:
-  - 'gcr.io/$PROJECT_ID/chicago-transit'
+  - '$_IMAGE'

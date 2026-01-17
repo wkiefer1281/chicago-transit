@@ -1,4 +1,4 @@
-# cta_buses.py
+# cta_bus.py
 import requests
 import pandas as pd
 from datetime import datetime
@@ -104,7 +104,7 @@ def chunked(iterable, size) -> Generator[list, None, None]:
     while chunk := list(islice(it, size)):
         yield chunk
 
-def fetch_all_bus_vehicles(time_resolution="s") -> pd.DataFrame:
+def fetch_all_bus_locations(time_resolution="s") -> pd.DataFrame:
     # Step 1: get all routes
     route_df = fetch_bus_routes().rename(columns={
         "route_id": "route"

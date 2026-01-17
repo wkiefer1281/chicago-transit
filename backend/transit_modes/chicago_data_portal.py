@@ -3,7 +3,7 @@ import os
 from sodapy import Socrata
 import pandas as pd
 
-def fetch_cta_station_names():
+def fetch_cta_stations():
     app_token = os.getenv("CHICAGO_APP_TOKEN")
     client = Socrata("data.cityofchicago.org", app_token)
     results = client.get("8pix-ypme", limit=2000)

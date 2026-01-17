@@ -19,7 +19,7 @@ COPY . /app
 # Create and activate virtual environment
 RUN python -m venv .venv \
     && .venv/bin/pip install --upgrade pip \
-    && .venv/bin/pip install -r requirements.txt
+    && .venv/bin/pip install -r requirements.lock
 
 # Set PATH to use venv
 ENV PATH="/app/.venv/bin:$PATH"

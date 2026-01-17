@@ -1,11 +1,11 @@
-# cta_trains.py
+# cta_train.py
 import xml.etree.ElementTree as ET
 import pandas as pd
 from datetime import datetime
 import requests
 from dotenv import load_dotenv
 import os
-from transit_modes.chicago_data_portal import fetch_cta_station_names
+from backend.transit_modes.chicago_data_portal import fetch_cta_station_names
 
 BASE_URL = "http://lapi.transitchicago.com/api/1.0"
 
