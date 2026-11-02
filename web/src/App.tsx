@@ -210,9 +210,15 @@ function Legend({ meta }: { meta: Meta }) {
         <i style={{ background: meta.bus_color }} />
         Bus
       </li>
+      {Object.entries(meta.metra_line_colors).map(([name, color]) => (
+        <li key={`metra-${name}`}>
+          <i style={{ background: color }} />
+          Metra {name}
+        </li>
+      ))}
       <li>
         <i style={{ background: meta.metra_color }} />
-        Metra
+        Metra (no line)
       </li>
       <li>
         <i className="ring" />

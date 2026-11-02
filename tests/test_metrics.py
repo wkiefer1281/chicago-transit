@@ -1,6 +1,7 @@
+import pytest
 import pandas as pd
 
-from server.metrics import delayed_by_group, delayed_pct, history_delay_pct
+from server.metrics import delayed_by_group, delayed_pct, history_delay_pct, known_delayed_pct
 
 
 def test_delayed_pct_and_empty():
@@ -25,3 +26,13 @@ def test_history_pct_is_pooled_ratio():
     h = pd.DataFrame({"route": ["Red"], "delayed": [3], "total": [12]})
     assert history_delay_pct(h)["delayed_pct"].iloc[0] == 25.0
     assert history_delay_pct(pd.DataFrame(columns=["delayed", "total"])).empty
+
+
+def test_known_delayed_pct_ignores_unknown_status():
+    df = pd.DataFrame({"is_delayed": pd.array([True, False, False, None, None, None], dtype="boolean")})
+    assert known_delayed_pct(df) == (pytest.approx(100 / 3), 3)
+
+
+def test_known_delayed_pct_is_none_when_nothing_is_known():
+    assert known_delayed_pct(pd.DataFrame()) == (None, 0)
+    assert known_delayed_pct(pd.DataFrame({"is_delayed": pd.array([None, None], dtype="boolean")})) == (None, 0)

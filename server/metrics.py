@@ -12,7 +12,22 @@ CTA_LINE_COLORS = {
     "Pink Line": "#e27ea6",
     "Yellow Line": "#f9e300",
 }
-METRA_COLOR = "#2563eb"
+# Metra's own route_color per line (routes.txt), keyed like the API's `route` (route_short_name).
+METRA_LINE_COLORS = {
+    "BNSF": "#29c233",
+    "HC": "#550e0c",
+    "MD-N": "#cc5500",
+    "MD-W": "#f1ad0e",
+    "ME": "#eb5c00",
+    "NCS": "#9785bc",
+    "RI": "#e02400",
+    "SWS": "#0042a8",
+    "UP-N": "#008000",
+    "UP-NW": "#ffe600",
+    "UP-W": "#fe8d81",
+}
+# Trains not running a scheduled trip (yard moves, deadheads) have no line.
+METRA_COLOR = "#6b7280"
 BUS_COLOR = "#0f766e"
 
 
@@ -26,6 +41,20 @@ def delayed_pct(df: pd.DataFrame) -> float:
     if df.empty:
         return 0.0
     return float(_flags(df["is_delayed"]).mean() * 100)
+
+
+def known_delayed_pct(df: pd.DataFrame) -> tuple[float | None, int]:
+    """(% delayed, how many vehicles it is out of), counting only vehicles whose status is known.
+
+    Unlike `delayed_pct`, a missing flag is not "on time": Metra only has one for trains with
+    a prediction. The percent is None when nothing is known.
+    """
+    if df.empty:
+        return None, 0
+    known = df["is_delayed"].dropna()
+    if known.empty:
+        return None, 0
+    return float(known.astype(bool).mean() * 100), len(known)
 
 
 def delayed_by_group(df: pd.DataFrame, group_col: str) -> pd.DataFrame:

@@ -36,6 +36,7 @@ def _metra():
         "route_id": ["", "UP-N"], "route_short_name": [None, "UP-N"], "trip_headsign": [None, None],
         "vehicle_id": ["m1", "m2"], "vehicle_label": ["101", None],
         "current_status": pd.array([None, 1], dtype="Int64"),
+        "is_delayed": pd.array([None, True], dtype="boolean"), "delay_minutes": [None, 9.0],
         "timestamp": [NOW] * 2, "lat": [42.0, 42.1], "lon": [-87.8, -87.7], "ingested_at": [NOW] * 2,
     })
 
@@ -80,6 +81,7 @@ def empty_client(monkeypatch):
 def test_meta_exposes_colors(client):
     body = client.get("/api/meta").json()
     assert body["line_colors"]["Red Line"] == "#c60c30"
+    assert body["metra_line_colors"]["UP-N"] == "#008000"
     assert body["history_windows"] == ["6h", "24h", "7d"]
 
 
@@ -88,6 +90,8 @@ def test_summary_with_data(client):
     assert body["kpis"]["trains"] == 3
     assert body["kpis"]["trains_delayed_pct"] == pytest.approx(33.33, abs=0.01)
     assert body["kpis"]["metra"] == 2
+    # Only the one train with a known status counts, so the unknown one isn't "on time".
+    assert body["kpis"]["metra_delayed_pct"] == 100 and body["kpis"]["metra_tracked"] == 1
     assert body["stale"] is False
     assert [r["route"] for r in body["trains_by_line"]] == ["Red Line", "Blue Line"]
     assert body["buses_by_route"][0]["route"] == "22"
@@ -97,6 +101,7 @@ def test_summary_without_data(empty_client):
     body = empty_client.get("/api/summary").json()
     assert body["updated_at"] is None and body["stale"] is True
     assert body["kpis"]["trains"] == 0
+    assert body["kpis"]["metra_delayed_pct"] is None and body["kpis"]["metra_tracked"] == 0
     assert body["trains_by_line"] == []
 
 

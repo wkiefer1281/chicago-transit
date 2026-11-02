@@ -20,6 +20,13 @@ Cloud Scheduler (every 5 min) -> Cloud Run Job (main.py) -> BigQuery (project ch
 
 Every run stamps all rows with the same `ingested_at` (UTC), so one run = one consistent snapshot.
 The app shows `ingested_at = MAX(ingested_at)`; analytics over time group by `ingested_at`.
+Metra's `positions` feed has no stop or status, and no trip for most trains, so the ETL fills `trip_id`, `route_id`,
+`stop_id`, `current_stop_sequence` and `current_status` from its `tripupdates` feed (the next stop with a predicted time;
+`INCOMING_AT` within 2 minutes, else `IN_TRANSIT_TO`). Anything Metra does report wins, and `current_status_source` says
+which it was (`reported` / `derived` / null). Trains with no scheduled trip (yard moves) stay blank.
+Metra never sends a delay either, so `delay_minutes` is the predicted arrival at that next stop minus its `stop_times.txt`
+time, and `is_delayed` is true at 5 minutes or more (`DELAY_THRESHOLD_MIN`). Both are null when there is no prediction,
+not false.
 All timestamps are stored as UTC `TIMESTAMP`s (CTA's local-time strings are converted from `America/Chicago`).
 
 Each source is fetched and loaded independently: if one API is down the others still load, and the

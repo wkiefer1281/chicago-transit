@@ -18,7 +18,9 @@ from server.metrics import (
     BUS_COLOR,
     CTA_LINE_COLORS,
     METRA_COLOR,
+    METRA_LINE_COLORS,
     delayed_by_group,
+    known_delayed_pct,
     delayed_pct,
     history_delay_pct,
 )
@@ -60,6 +62,7 @@ def meta() -> dict:
         "line_colors": CTA_LINE_COLORS,
         "bus_color": BUS_COLOR,
         "metra_color": METRA_COLOR,
+        "metra_line_colors": METRA_LINE_COLORS,
         "history_windows": list(HISTORY_WINDOWS),
         # A browser key (restrict it by HTTP referrer); without one the map has no basemap.
         "google_maps_api_key": get_env("GOOGLE_MAPS_API_KEY") or None,
@@ -73,6 +76,8 @@ def summary() -> dict:
     updated = max(stamps).to_pydatetime() if stamps else None
     age_min = (datetime.now(timezone.utc) - updated).total_seconds() / 60 if updated else None
 
+    metra_delayed_pct, metra_tracked = known_delayed_pct(metra)
+
     by_route = delayed_by_group(buses, "route")
     by_route = by_route[by_route["vehicles"] >= MIN_BUS_SAMPLE].head(10)
     return {
@@ -85,6 +90,8 @@ def summary() -> dict:
             "buses": len(buses),
             "buses_delayed_pct": delayed_pct(buses),
             "metra": len(metra),
+            "metra_delayed_pct": metra_delayed_pct,
+            "metra_tracked": metra_tracked,
         },
         "trains_by_line": records(delayed_by_group(trains, "route")),
         "buses_by_route": records(by_route),

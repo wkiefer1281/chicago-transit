@@ -6,7 +6,8 @@ const meta: Meta = {
   refresh_s: 60,
   line_colors: { "Red Line": "#c60c30" },
   bus_color: "#0f766e",
-  metra_color: "#2563eb",
+  metra_color: "#6b7280",
+  metra_line_colors: { "UP-N": "#008000" },
   history_windows: ["24h"],
   google_maps_api_key: null,
 };
@@ -37,6 +38,37 @@ const snaps = parseSnapshots(
 );
 
 describe("parseSnapshots", () => {
+  it("colors Metra trains by line, and those without a line neutrally", () => {
+    const metra = (id: string, route: string): RawVehicle => ({ ...train(id, 41.9, -87.7), route, destination: null, label: id });
+    const [s] = parseSnapshots(
+      [{ t: "2026-11-01T12:00:00Z", trains: [], buses: [], metra: [metra("a", "UP-N"), metra("b", "Metra")] }],
+      meta,
+    );
+    expect(s.vehicles.get("metra:a")!.color).toBe("#008000");
+    expect(s.vehicles.get("metra:b")!.color).toBe("#6b7280");
+  });
+
+  it("shows Metra delay only when it is known", () => {
+    const metra = (id: string, extra: Partial<RawVehicle>): RawVehicle => ({
+      ...train(id, 41.9, -87.7), route: "UP-N", destination: null, label: id, ...extra,
+    });
+    const [s] = parseSnapshots(
+      [{
+        t: "2026-11-01T12:00:00Z", trains: [], buses: [],
+        metra: [
+          metra("late", { is_delayed: true, delay_minutes: 12.4 }),
+          metra("ok", { is_delayed: false, delay_minutes: 1 }),
+          metra("unknown", { is_delayed: null }),
+        ],
+      }],
+      meta,
+    );
+    expect(s.vehicles.get("metra:late")!.detail).toBe("Train late · 12 min late");
+    expect(s.vehicles.get("metra:late")!.delayed).toBe(true);
+    expect(s.vehicles.get("metra:ok")!.detail).toBe("Train ok · On time");
+    expect(s.vehicles.get("metra:unknown")!.detail).toBe("Train unknown");
+  });
+
   it("sorts by time and styles vehicles", () => {
     expect(snaps.map((s) => s.t)).toEqual([T0, T1]);
     const v = snaps[0].vehicles.get("trains:1")!;

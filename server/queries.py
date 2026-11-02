@@ -64,7 +64,7 @@ def load_metra() -> pd.DataFrame:
     return _query(_latest_snapshot(
         "metra_train_locations",
         """route_id, route_short_name, trip_headsign, vehicle_id, vehicle_label,
-           current_status, timestamp, latitude AS lat, longitude AS lon""",
+           current_status, is_delayed, delay_minutes, timestamp, latitude AS lat, longitude AS lon""",
         "AND latitude IS NOT NULL AND longitude IS NOT NULL",
     ))
 
@@ -88,7 +88,7 @@ _POSITION_QUERIES = {
         "metra_train_locations",
         """vehicle_id AS id, COALESCE(NULLIF(route_short_name, ''), NULLIF(route_id, ''), 'Metra') AS route,
            trip_headsign AS destination, COALESCE(vehicle_label, vehicle_id) AS label,
-           latitude AS lat, longitude AS lon""",
+           is_delayed, delay_minutes, latitude AS lat, longitude AS lon""",
         "latitude IS NOT NULL AND longitude IS NOT NULL AND vehicle_id IS NOT NULL",
     ),
 }

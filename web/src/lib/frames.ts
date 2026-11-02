@@ -34,6 +34,12 @@ export interface Point {
 
 const status = (delayed: boolean | null | undefined) => (delayed ? "Delayed" : "On time");
 
+/** " · 12 min late" / " · On time" for Metra trains with a prediction; nothing when it is unknown. */
+function metraDelay(v: RawVehicle): string {
+  if (v.is_delayed == null) return "";
+  return v.is_delayed ? ` · ${Math.round(v.delay_minutes ?? 0)} min late` : " · On time";
+}
+
 function describe(mode: Mode, v: RawVehicle): { label: string; detail: string } {
   switch (mode) {
     case "trains":
@@ -47,13 +53,16 @@ function describe(mode: Mode, v: RawVehicle): { label: string; detail: string } 
         detail: `${v.speed_mph ?? "?"} mph · ${status(v.is_delayed)}`,
       };
     case "metra":
-      return { label: `Metra ${v.route} ${v.destination ?? ""}`.trim(), detail: `Train ${v.label ?? v.id}` };
+      return {
+        label: `Metra ${v.route} ${v.destination ?? ""}`.trim(),
+        detail: `Train ${v.label ?? v.id}${metraDelay(v)}`,
+      };
   }
 }
 
 function colorOf(mode: Mode, route: string, meta: Meta): string {
   if (mode === "buses") return meta.bus_color;
-  if (mode === "metra") return meta.metra_color;
+  if (mode === "metra") return meta.metra_line_colors[route] ?? meta.metra_color;
   return meta.line_colors[route] ?? FALLBACK_COLOR;
 }
 

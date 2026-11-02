@@ -2,7 +2,8 @@ export interface Meta {
   refresh_s: number;
   line_colors: Record<string, string>;
   bus_color: string;
-  metra_color: string;
+  metra_color: string; // Metra trains with no line
+  metra_line_colors: Record<string, string>;
   history_windows: string[];
   google_maps_api_key: string | null;
 }
@@ -24,6 +25,8 @@ export interface Summary {
     buses: number;
     buses_delayed_pct: number;
     metra: number;
+    metra_delayed_pct: number | null; // of the trains with a prediction, null when none
+    metra_tracked: number; // how many that is
   };
   trains_by_line: GroupDelay[];
   buses_by_route: GroupDelay[];
@@ -42,6 +45,7 @@ export interface RawVehicle {
   speed_mph?: number | null;
   label?: string | null;
   is_delayed?: boolean | null;
+  delay_minutes?: number | null;
 }
 
 export interface RawSnapshot extends Record<Mode, RawVehicle[]> {
