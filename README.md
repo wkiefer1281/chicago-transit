@@ -97,8 +97,11 @@ Note BigQuery allows 1,500 load jobs per table per day: running more often than 
 | `GET /api/meta` | Line colors and refresh interval |
 
 `web/` is a Vite + React + TypeScript app that draws everything with [Vega-Lite](https://vega.github.io/vega-lite/)
-(via `vega-embed`): the map is a Vega `geoshape` of Chicago's community areas and CTA track
-(`web/public/geo/`, simplified from the City of Chicago data portal) with vehicles as a live dataset on top.
+(via `vega-embed`). The map is a Google Maps basemap (with its zoom buttons) under a transparent Vega layer that draws
+the vehicles as a live dataset and follows the map's pan and zoom. The Maps JavaScript API key comes from the
+`GOOGLE_MAPS_API_KEY` environment variable via `/api/meta` (use a browser key restricted by HTTP referrer). Without a
+key, the map falls back to a Vega `geoshape` of Chicago's community areas and CTA track (`web/public/geo/`, simplified
+from the City of Chicago data portal), which doesn't show Metra's suburbs or zoom.
 
 The ETL only records a snapshot every few minutes, so the motion is interpolated: in **Live** mode vehicles glide to
 their new positions whenever a refresh lands, and **Replay** plays back the last 30 min to 3 h at 30-300x, with a
@@ -116,7 +119,7 @@ for role in roles/bigquery.dataViewer roles/bigquery.jobUser; do
   gcloud projects add-iam-policy-binding $P --member=serviceAccount:chicago-transit-web@$P.iam.gserviceaccount.com --role=$role
 done
 gcloud run deploy chicago-transit-web --region=$R --image=us-central1-docker.pkg.dev/$P/chicago-transit/web \
-  --service-account=chicago-transit-web@$P.iam.gserviceaccount.com --set-env-vars=BQ_PROJECT_ID=$P \
+  --service-account=chicago-transit-web@$P.iam.gserviceaccount.com --set-env-vars=BQ_PROJECT_ID=$P,GOOGLE_MAPS_API_KEY=$MAPS_KEY \
   --max-instances=3 --no-allow-unauthenticated
 ```
 

@@ -4,6 +4,7 @@ export interface Meta {
   bus_color: string;
   metra_color: string;
   history_windows: string[];
+  google_maps_api_key: string | null;
 }
 
 export interface GroupDelay {

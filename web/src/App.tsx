@@ -94,7 +94,7 @@ export function App() {
             </label>
           </div>
         </div>
-        <MapView ref={mapRef} />
+        {meta ? <MapView ref={mapRef} googleMapsApiKey={meta.google_maps_api_key} /> : <div className="map" />}
         <PlaybackBar pb={playback} disabled={snaps.length === 0} />
         {meta && <Legend meta={meta} />}
         {positions.error && <p className="note">Couldn’t load vehicle positions: {positions.error.message}</p>}

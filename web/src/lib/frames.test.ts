@@ -8,6 +8,7 @@ const meta: Meta = {
   bus_color: "#0f766e",
   metra_color: "#2563eb",
   history_windows: ["24h"],
+  google_maps_api_key: null,
 };
 
 const train = (id: string, lat: number, lon: number, extra: Partial<RawVehicle> = {}): RawVehicle => ({

@@ -12,6 +12,7 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 
+from backend.config import get_env
 from server import queries
 from server.metrics import (
     BUS_COLOR,
@@ -60,6 +61,8 @@ def meta() -> dict:
         "bus_color": BUS_COLOR,
         "metra_color": METRA_COLOR,
         "history_windows": list(HISTORY_WINDOWS),
+        # A browser key (restrict it by HTTP referrer); without one the map has no basemap.
+        "google_maps_api_key": get_env("GOOGLE_MAPS_API_KEY") or None,
     }
 
 

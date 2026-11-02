@@ -41,7 +41,11 @@ label { display: inline-flex; align-items: center; gap: 6px; color: var(--muted)
 select, .btn { font: inherit; }
 select { padding: 4px 8px; border: 1px solid var(--line); border-radius: 6px; background: #fff; }
 
-.map { width: 100%; min-height: 640px; border-radius: 8px; background: #eef2f7; overflow: hidden; }
+.map-wrap { position: relative; min-height: 640px; border-radius: 8px; overflow: hidden; background: #eef2f7; }
+.map-base { position: absolute; inset: 0; }
+.map { width: 100%; min-height: 640px; background: #eef2f7; overflow: hidden; }
+/* Vehicles drawn over Google Maps: clicks and drags fall through to the map underneath. */
+.map.over-basemap { position: absolute; inset: 0; background: none; pointer-events: none; }
 
 .playback { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 12px; }
 .playback input[type="range"] { flex: 1 1 200px; accent-color: var(--accent); }
