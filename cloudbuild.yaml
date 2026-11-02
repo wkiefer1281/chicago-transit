@@ -63,4 +63,6 @@ images:
   - '${_IMAGE}:latest'
 
 options:
+  # _IMAGE references ${PROJECT_ID} and ${_REPO}, so the substitutions must be resolved recursively.
+  dynamicSubstitutions: true
   logging: CLOUD_LOGGING_ONLY

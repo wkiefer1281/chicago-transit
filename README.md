@@ -111,8 +111,21 @@ which also serves `web/dist`. The service account needs `roles/bigquery.dataView
 ```bash
 docker build -f Dockerfile.web -t us-central1-docker.pkg.dev/$P/chicago-transit/web .
 docker push us-central1-docker.pkg.dev/$P/chicago-transit/web
+gcloud iam service-accounts create chicago-transit-web   # once
+for role in roles/bigquery.dataViewer roles/bigquery.jobUser; do
+  gcloud projects add-iam-policy-binding $P --member=serviceAccount:chicago-transit-web@$P.iam.gserviceaccount.com --role=$role
+done
 gcloud run deploy chicago-transit-web --region=$R --image=us-central1-docker.pkg.dev/$P/chicago-transit/web \
-  --service-account=chicago-transit-web@$P.iam.gserviceaccount.com --set-env-vars=BQ_PROJECT_ID=$P
+  --service-account=chicago-transit-web@$P.iam.gserviceaccount.com --set-env-vars=BQ_PROJECT_ID=$P \
+  --max-instances=3 --no-allow-unauthenticated
+```
+
+The service is private by default (open it locally with `gcloud run services proxy chicago-transit-web --region=$R`).
+To make it public, keep `--max-instances` as a cost cap and allow all callers:
+
+```bash
+gcloud run services add-iam-policy-binding chicago-transit-web --region=$R \
+  --member=allUsers --role=roles/run.invoker
 ```
 
 The API warns if the newest data is more than 15 minutes old. `REFRESH_MS` (default 60000) sets how often the browser polls.
