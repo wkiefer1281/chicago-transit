@@ -1,42 +1,29 @@
 # cta_bus.py
-import requests
-import pandas as pd
-from datetime import datetime
 from itertools import islice
 from typing import Generator
-from dotenv import load_dotenv
-import os
+
+import pandas as pd
+
+from backend.config import require_env
+from backend.utilities import http
+from backend.utilities.timeutils import parse_cta_time
 
 BASE_URL = "https://www.ctabustracker.com/bustime/api/v3"
+REQUEST_TIMEOUT = 30
+MAX_ROUTES_PER_REQUEST = 10  # getvehicles accepts at most 10 routes
 
-# Load environment variables from .env file
-load_dotenv()
 
-# Retrieve API keys from .env file
-cta_bus_api_key = os.getenv('CTA_BUS_API_KEY')
+def _get(endpoint: str, **params) -> dict:
+    response = http.get(
+        f"{BASE_URL}/{endpoint}",
+        params={"key": require_env("CTA_BUS_API_KEY"), "format": "json", **params},
+        timeout=REQUEST_TIMEOUT,
+    )
+    return response.json().get("bustime-response", {})
 
-# Helper function to convert time string to datetime in the format "YYYYMMDD HH:MM:SS"
-def convert_to_datetime(t: str) -> datetime | None:
-    for fmt in ("%Y%m%d %H:%M:%S", "%Y%m%d %H:%M"):
-        try:
-            dt = datetime.strptime(t, fmt)
-            return dt.astimezone()  # Converts to system local timezone
-        except (ValueError, TypeError):
-            continue
-    return None
 
 def fetch_bus_routes() -> pd.DataFrame:
-
-    url = f"{BASE_URL}/getroutes"
-    params = {
-        "key": cta_bus_api_key,
-        "format": "json"
-    }
-
-    response = requests.get(url, params=params)
-    response.raise_for_status()
-
-    routes = response.json().get("bustime-response", {}).get("routes", [])
+    routes = _get("getroutes").get("routes", [])
     if not routes:
         return pd.DataFrame()
 
@@ -45,90 +32,93 @@ def fetch_bus_routes() -> pd.DataFrame:
             "route_id": r["rt"],
             "route_name": r["rtnm"],
             "route_color": r["rtclr"],
-            "route_display": r["rtdd"]
+            "route_display": r["rtdd"],
         }
         for r in routes
     ])
 
-def fetch_bus_locations(routes: list[str] = None, time_resolution: str = "s") -> pd.DataFrame:
-    """Fetch current vehicle positions."""
 
-    url = f"{BASE_URL}/getvehicles"
-    params = {
-        "key": cta_bus_api_key,
-        "format": "json",
-        "tmres": time_resolution  # “s” for second resolution
-    }
-    if routes:
-        params["rt"] = ",".join(routes[:10])  # max 10 allowed
+def _to_bool(value) -> bool:
+    return str(value).strip().lower() in {"1", "true", "t", "y", "yes"}
 
-    r = requests.get(url, params=params)
-    r.raise_for_status()
-    data = r.json().get("bustime-response", {})
 
-    if "vehicle" not in data:
-        return pd.DataFrame()
+def _to_int(value, default=None):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
 
-    vehicles = data["vehicle"]
+
+def parse_vehicles(vehicles: list[dict]) -> pd.DataFrame:
     records = []
-
     for v in vehicles:
+        try:
+            lat, lon = float(v["lat"]), float(v["lon"])
+        except (KeyError, TypeError, ValueError):
+            continue  # a vehicle without a position is useless here
         records.append({
             "vehicle_id": v.get("vid"),
-            "timestamp": convert_to_datetime(v.get("tmstmp")),
-            "lat": float(v["lat"]),
-            "lon": float(v["lon"]),
-            "heading": int(v["hdg"]),
+            "timestamp": parse_cta_time(v.get("tmstmp")),
+            "lat": lat,
+            "lon": lon,
+            "heading": _to_int(v.get("hdg")),
             "route": v.get("rt"),
             "destination": v.get("des"),
             "pattern_id": v.get("pid"),
-            "distance_along_route_ft": int(v.get("pdist", 0)),
-            "is_delayed": v.get("dly", False),
-            "speed_mph": int(v.get("spd", 0)),
+            "distance_along_route_ft": _to_int(v.get("pdist")),
+            "is_delayed": _to_bool(v.get("dly", False)),
+            "speed_mph": _to_int(v.get("spd")),
             "block_id": v.get("tablockid"),
             "trip_id": v.get("tatripid"),
             "origin_trip_no": v.get("origtatripno"),
             "zone": v.get("zone", ""),
-            "mode": int(v.get("mode", 0)),  # 1 = bus
+            "mode": _to_int(v.get("mode")),  # 1 = bus
             "passenger_load": v.get("psgld"),
-            "scheduled_start_sec": int(v.get("stst", 0)),
-            "scheduled_start_date": v.get("stsd")
+            "scheduled_start_sec": _to_int(v.get("stst")),
+            "scheduled_start_date": v.get("stsd"),
         })
 
-    return pd.DataFrame(records)
+    df = pd.DataFrame(records)
+    if not df.empty:
+        df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True)
+        for col in ("heading", "distance_along_route_ft", "speed_mph", "mode", "scheduled_start_sec"):
+            df[col] = df[col].astype("Int64")
+    return df
 
 
-# Helper to chunk routes in batches of 10
+def fetch_bus_locations(routes: list[str] | None = None, time_resolution: str = "s") -> pd.DataFrame:
+    """Fetch current vehicle positions (time_resolution "s" = second resolution)."""
+    params = {"tmres": time_resolution}
+    if routes:
+        params["rt"] = ",".join(routes[:MAX_ROUTES_PER_REQUEST])
+
+    vehicles = _get("getvehicles", **params).get("vehicle")
+    if not vehicles:
+        return pd.DataFrame()
+    return parse_vehicles(vehicles)
+
+
 def chunked(iterable, size) -> Generator[list, None, None]:
     it = iter(iterable)
     while chunk := list(islice(it, size)):
         yield chunk
 
-def fetch_all_bus_locations(time_resolution="s") -> pd.DataFrame:
-    # Step 1: get all routes
-    route_df = fetch_bus_routes().rename(columns={
-        "route_id": "route"
-    })
 
+def fetch_all_bus_locations(time_resolution: str = "s") -> pd.DataFrame:
+    route_df = fetch_bus_routes()
+    if route_df.empty:
+        return pd.DataFrame()
+    route_df = route_df.rename(columns={"route_id": "route"})
     route_df["route"] = route_df["route"].astype(str)
 
-    # Step 2: chunk the route IDs and fetch vehicles
-    route_ids = route_df["route"].tolist()
-    all_records = []
-
-    for route_chunk in chunked(route_ids, 10):
+    frames = []
+    for route_chunk in chunked(route_df["route"].tolist(), MAX_ROUTES_PER_REQUEST):
         df = fetch_bus_locations(route_chunk, time_resolution)
         if not df.empty:
-            all_records.append(df)
+            frames.append(df)
 
-    if not all_records:
+    if not frames:
         return pd.DataFrame()
 
-    vehicles_df = pd.concat(all_records, ignore_index=True)
-
-    # Step 3: merge vehicle data with route metadata
-    full_df = vehicles_df.merge(route_df, on="route", how="left")
-
-    return full_df
-
-
+    vehicles_df = pd.concat(frames, ignore_index=True)
+    return vehicles_df.merge(route_df, on="route", how="left")

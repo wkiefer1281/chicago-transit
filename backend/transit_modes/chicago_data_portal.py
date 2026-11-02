@@ -1,11 +1,12 @@
 # chicago_data_portal.py
-import os
-from sodapy import Socrata
 import pandas as pd
+from sodapy import Socrata
+
+from backend.config import get_env
 
 def fetch_cta_stations():
-    app_token = os.getenv("CHICAGO_APP_TOKEN")
-    client = Socrata("data.cityofchicago.org", app_token)
+    app_token = get_env("CHICAGO_APP_TOKEN")
+    client = Socrata("data.cityofchicago.org", app_token, timeout=30)
     results = client.get("8pix-ypme", limit=2000)
     results_df = pd.DataFrame.from_records(results)
 
@@ -24,5 +25,3 @@ def fetch_cta_stations():
         results_df = results_df.drop(columns=["location"])
 
     return results_df
-
-

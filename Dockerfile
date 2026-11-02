@@ -1,28 +1,25 @@
-# Use slim Python image
 FROM python:3.12-slim
 
-# Set environment variables
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    UV_PYTHON_DOWNLOADS=never \
+    UV_LINK_MODE=copy \
+    PATH="/app/.venv/bin:$PATH"
 
-# Set working directory
+COPY --from=ghcr.io/astral-sh/uv:0.10 /uv /usr/local/bin/uv
+
 WORKDIR /app
 
-# Install OS dependencies
-RUN apt-get update && apt-get install -y \
-    curl gcc libpq-dev build-essential \
-    && apt-get clean && rm -rf /var/lib/apt/lists/*
+# Dependencies first so code changes don't bust the layer cache. The project itself
+# (src/chicago_transit) isn't needed at runtime, so it isn't installed.
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-dev --no-install-project
 
-# Copy project files
-COPY . /app
+COPY main.py ./
+COPY backend ./backend
+COPY scripts ./scripts
 
-# Create and activate virtual environment
-RUN python -m venv .venv \
-    && .venv/bin/pip install --upgrade pip \
-    && .venv/bin/pip install -r requirements.lock
+RUN useradd --create-home app
+USER app
 
-# Set PATH to use venv
-ENV PATH="/app/.venv/bin:$PATH"
-
-# Run main.py using venv's Python
 CMD ["python", "main.py"]

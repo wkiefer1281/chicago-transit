@@ -2,3 +2,10 @@ __pycache__/
 .venv
 *.json
 .env
+.pytest_cache/
+
+# web app sources (the web image is built from Dockerfile.web)
+!web/package.json
+!web/package-lock.json
+!web/tsconfig.json
+!web/public/geo/*.json

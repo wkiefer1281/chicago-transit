@@ -1,66 +1,66 @@
+# Builds the ETL image, deploys it as a Cloud Run Job, and schedules it.
+# One-time project setup (repo, service accounts, secret) is described in README.md.
 substitutions:
   _REGION: us-central1
-  _IMAGE: gcr.io/${PROJECT_ID}/chicago-transit
+  _REPO: chicago-transit
+  _IMAGE: us-central1-docker.pkg.dev/${PROJECT_ID}/${_REPO}/etl
   _JOB_NAME: chicago-transit-job
-  _SCHEDULE: "0 * * * *"
+  _JOB_SA: chicago-transit-etl@${PROJECT_ID}.iam.gserviceaccount.com
+  _SCHEDULE: "*/5 * * * *"
   _SCHEDULER_JOB_NAME: chicago-transit-schedule
   _SCHEDULER_SA: scheduler-invoker@${PROJECT_ID}.iam.gserviceaccount.com
-  _SECRET_JSON: projects/655831717805/secrets/chicago-transit-secret:latest
+  _SECRET_NAME: chicago-transit-secret
+  _BQ_PROJECT_ID: chicago-transit-513422
+  _BQ_DATASET: transit_data
 
 steps:
-  # Step 1: Build the Docker image from Dockerfile
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['build', '-t', '$_IMAGE', '.']
+    args: ['build', '-t', '${_IMAGE}:${BUILD_ID}', '-t', '${_IMAGE}:latest', '.']
 
-  # Step 2: Push the image to Google Container Registry (or Artifact Registry)
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['push', '$_IMAGE']
+    args: ['push', '--all-tags', '${_IMAGE}']
 
-  # Step 3: Deploy a Cloud Run Job (batch workload)
+  # Cloud Run Job: one task per run, no retries (the next scheduled run is minutes away,
+  # and a retry would append a second snapshot for the sources that already succeeded).
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: 'gcloud'
     args:
       - 'run'
       - 'jobs'
       - 'deploy'
-      - '$_JOB_NAME'
-      - '--image'
-      - '$_IMAGE'
-      - '--region'
-      - '$_REGION'
-      - '--tasks'
-      - '1'
-      - '--max-retries'
-      - '1'
-      - '--set-secrets'
-      - 'CHICAGO_TRANSIT_SECRET_JSON=$_SECRET_JSON'
+      - '${_JOB_NAME}'
+      - '--image=${_IMAGE}:${BUILD_ID}'
+      - '--region=${_REGION}'
+      - '--service-account=${_JOB_SA}'
+      - '--tasks=1'
+      - '--max-retries=0'
+      - '--task-timeout=300s'
+      - '--set-env-vars=BQ_PROJECT_ID=${_BQ_PROJECT_ID},BQ_DATASET=${_BQ_DATASET}'
+      - '--set-secrets=CHICAGO_TRANSIT_SECRET_JSON=${_SECRET_NAME}:latest'
 
-  # Step 4: Create or update a Cloud Scheduler job to invoke the Cloud Run Job
+  # Cloud Scheduler -> Cloud Run Jobs "run" API. Google APIs need an OAuth token (not OIDC).
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: 'bash'
     args:
       - '-c'
       - |
         set -euo pipefail
-        URI="https://run.googleapis.com/apis/run.googleapis.com/v1/namespaces/${PROJECT_ID}/jobs/${_JOB_NAME}:run"
+        URI="https://${_REGION}-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/${PROJECT_ID}/jobs/${_JOB_NAME}:run"
         if gcloud scheduler jobs describe "${_SCHEDULER_JOB_NAME}" --location "${_REGION}" >/dev/null 2>&1; then
-          gcloud scheduler jobs update http "${_SCHEDULER_JOB_NAME}" \
-            --location "${_REGION}" \
-            --schedule "${_SCHEDULE}" \
-            --uri "$${URI}" \
-            --http-method POST \
-            --oidc-service-account-email "${_SCHEDULER_SA}"
+          verb=update
         else
-          gcloud scheduler jobs create http "${_SCHEDULER_JOB_NAME}" \
-            --location "${_REGION}" \
-            --schedule "${_SCHEDULE}" \
-            --uri "$${URI}" \
-            --http-method POST \
-            --oidc-service-account-email "${_SCHEDULER_SA}"
+          verb=create
         fi
+        gcloud scheduler jobs "$${verb}" http "${_SCHEDULER_JOB_NAME}" \
+          --location "${_REGION}" \
+          --schedule "${_SCHEDULE}" \
+          --uri "$${URI}" \
+          --http-method POST \
+          --oauth-service-account-email "${_SCHEDULER_SA}"
 
 images:
-  - '$_IMAGE'
+  - '${_IMAGE}:${BUILD_ID}'
+  - '${_IMAGE}:latest'
 
 options:
   logging: CLOUD_LOGGING_ONLY

@@ -1,33 +1,39 @@
 # metra.py
 
-import os
 import io
-import requests
-from dotenv import load_dotenv
 import zipfile
-import pandas as pd
 from datetime import datetime
-from zoneinfo import ZoneInfo
+from functools import lru_cache
+
+import pandas as pd
 from google.transit import gtfs_realtime_pb2
 
-# Load environment variables from .env file
-load_dotenv()
+from backend.config import require_env
+from backend.utilities import http
+from backend.utilities.timeutils import CHICAGO_TZ
 
 # Constants
 REALTIME_BASE_URL = "https://gtfspublic.metrarr.com/gtfs/public"
 STATIC_GTFS_URL = f"{REALTIME_BASE_URL}/schedule.zip"
-METRA_API_TOKEN = os.getenv("METRA_API_TOKEN")
-HEADERS = {"Authorization": f"Bearer {METRA_API_TOKEN}"}
-CHICAGO_TZ = ZoneInfo("America/Chicago")
+REQUEST_TIMEOUT = 60
+
+
+def _headers() -> dict:
+    return {"Authorization": f"Bearer {require_env('METRA_API_TOKEN')}"}
+
 
 # ============================
 # Static GTFS Schedule Functions
 # ============================
 
+@lru_cache(maxsize=1)
+def _download_gtfs_static() -> bytes:
+    """Download schedule.zip once per process; it is shared by every static lookup."""
+    return http.get(STATIC_GTFS_URL, headers=_headers(), timeout=REQUEST_TIMEOUT).content
+
+
 def _load_gtfs_static_file(filename: str) -> pd.DataFrame:
-    response = requests.get(STATIC_GTFS_URL, headers=HEADERS)
-    response.raise_for_status()
-    with zipfile.ZipFile(io.BytesIO(response.content)) as z:
+    with zipfile.ZipFile(io.BytesIO(_download_gtfs_static())) as z:
         with z.open(filename) as f:
             df = pd.read_csv(f)
             df.columns = df.columns.str.strip()
@@ -59,8 +65,7 @@ def fetch_metra_stop_times() -> pd.DataFrame:
 
 def _parse_realtime_feed(feed_name: str) -> gtfs_realtime_pb2.FeedMessage:
     url = f"{REALTIME_BASE_URL}/{feed_name}"
-    response = requests.get(url, headers=HEADERS)
-    response.raise_for_status()
+    response = http.get(url, headers=_headers(), timeout=REQUEST_TIMEOUT)
     feed = gtfs_realtime_pb2.FeedMessage()
     feed.ParseFromString(response.content)
     return feed
@@ -101,6 +106,9 @@ def fetch_metra_vehicle_positions() -> pd.DataFrame:
     if df.empty:
         return df
 
+    df["current_status"] = df["current_status"].astype("Int64")
+    df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True)
+
     # ----------------------------
     # 2. Join Static GTFS Metadata
     # ----------------------------
@@ -121,12 +129,13 @@ def fetch_metra_vehicle_positions() -> pd.DataFrame:
     # ----------------------------
     # 3. Combine datetime fields
     # ----------------------------
-    try:
-        df["start_datetime"] = pd.to_datetime(
-            df["start_date"] + " " + df["start_time"], format="%Y%m%d %H:%M:%S"
-        ).dt.tz_localize(CHICAGO_TZ)
-    except Exception:
-        df["start_datetime"] = pd.NaT
+    # The feed often leaves these blank; coerce to NaT but keep a tz-aware UTC dtype
+    # so the BigQuery column is always TIMESTAMP.
+    df["start_datetime"] = (
+        pd.to_datetime(df["start_date"] + " " + df["start_time"], format="%Y%m%d %H:%M:%S", errors="coerce")
+        .dt.tz_localize(CHICAGO_TZ, ambiguous="NaT", nonexistent="NaT")
+        .dt.tz_convert("UTC")
+    )
 
     df.drop(columns=["start_time", "start_date"], inplace=True, errors="ignore")
 

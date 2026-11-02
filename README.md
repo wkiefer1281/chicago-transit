@@ -1,36 +1,118 @@
 # chicago-transit
 
-Pipeline to pull CTA (trains + buses) and Metra data into BigQuery plus a small frontend to visualize it on a map.
+Pulls CTA (trains + buses) and Metra vehicle data into BigQuery on a schedule, keeps the full
+history, and serves a live, animated map with delay analytics.
 
-## Prereqs
-- Python 3.12+
-- BigQuery project + dataset (`transit_data` by default)
-- Environment variables: see `.env.example` (not provided here). Required: `CTA_TRAIN_API_KEY`, `CTA_BUS_API_KEY`, `METRA_API_TOKEN`, `CHICAGO_APP_TOKEN`, `GOOGLE_APPLICATION_CREDENTIALS`, `BQ_PROJECT_ID`, optional `BQ_DATASET` (defaults to `transit_data`), `OUTPUT_MODE`.
+```
+Cloud Scheduler (every 5 min) -> Cloud Run Job (main.py) -> BigQuery (project chicago-transit-513422)
+                                                                 |
+                                       FastAPI (server/) reads latest snapshot + history
+                                                                 |
+                                       React + Vega web app (web/) polls the API and animates vehicles
+```
 
-## Secrets (Cloud Run job)
-When running the scheduled Cloud Run job, set a single Secret Manager secret as a JSON payload and map it to `CHICAGO_TRANSIT_SECRET_JSON`.
-Example payload:
+## BigQuery tables (dataset `transit_data`)
+
+| Table | Load mode | Notes |
+|---|---|---|
+| `cta_train_locations`, `cta_bus_locations`, `metra_train_locations` | **append** | One batch of rows per run. Partitioned by day on `ingested_at`. |
+| `cta_stations`, `metra_stations` | replace | Static reference data. |
+
+Every run stamps all rows with the same `ingested_at` (UTC), so one run = one consistent snapshot.
+The app shows `ingested_at = MAX(ingested_at)`; analytics over time group by `ingested_at`.
+All timestamps are stored as UTC `TIMESTAMP`s (CTA's local-time strings are converted from `America/Chicago`).
+
+Each source is fetched and loaded independently: if one API is down the others still load, and the
+run exits non-zero so the failure shows up in Cloud Run.
+
+## Local development
+
+Requires Python 3.12+ and [uv](https://docs.astral.sh/uv/) (`uv sync`).
+
+```bash
+cp .env.example .env        # fill in keys; BQ_PROJECT_ID=chicago-transit-513422
+OUTPUT_MODE=df uv run main.py   # fetch + print, touches nothing
+uv run main.py                  # fetch + append to BigQuery
+uv run pytest
+```
+
+Web app (two terminals; the Vite dev server proxies `/api` to the API):
+
+```bash
+uv run uvicorn server.app:app --reload     # API on :8000 (needs BQ_PROJECT_ID + GOOGLE_APPLICATION_CREDENTIALS)
+cd web && npm install && npm run dev  # app on :5173
+cd web && npm test                  # frame-interpolation tests
+```
+
+Configuration is read lazily from the environment, `.env`, and the optional
+`CHICAGO_TRANSIT_SECRET_JSON` (real env vars win). See `.env.example`.
+
+## Deploying the ETL (one-time setup, then `gcloud builds submit`)
+
+```bash
+P=chicago-transit-513422; R=us-central1
+gcloud config set project $P
+gcloud services enable run.googleapis.com cloudbuild.googleapis.com cloudscheduler.googleapis.com \
+  artifactregistry.googleapis.com secretmanager.googleapis.com bigquery.googleapis.com
+
+gcloud artifacts repositories create chicago-transit --repository-format=docker --location=$R
+
+# ETL runtime identity: may load into BigQuery and read the secret
+gcloud iam service-accounts create chicago-transit-etl
+for role in roles/bigquery.dataEditor roles/bigquery.jobUser; do
+  gcloud projects add-iam-policy-binding $P --member=serviceAccount:chicago-transit-etl@$P.iam.gserviceaccount.com --role=$role
+done
+
+# Scheduler identity: may run the job
+gcloud iam service-accounts create scheduler-invoker
+gcloud projects add-iam-policy-binding $P --member=serviceAccount:scheduler-invoker@$P.iam.gserviceaccount.com --role=roles/run.invoker
+
+# One secret holding all API credentials as JSON
+gcloud secrets create chicago-transit-secret --data-file=secret.json   # see payload below
+gcloud secrets add-iam-policy-binding chicago-transit-secret \
+  --member=serviceAccount:chicago-transit-etl@$P.iam.gserviceaccount.com --role=roles/secretmanager.secretAccessor
+
+gcloud builds submit --config cloudbuild.yaml
+```
+
+Secret payload (`secret.json`, never commit it):
 ```json
-{
-  "CHICAGO_APP_TOKEN": "abc",
-  "CHICAGO_SECRET_TOKEN": "def",
-  "CTA_TRAIN_API_KEY": "ghi",
-  "CTA_BUS_API_KEY": "jkl",
-  "METRA_API_TOKEN": "mno"
-}
-```
-Local development uses `.env` instead; `CHICAGO_TRANSIT_SECRET_JSON` is optional locally.
-
-## ETL
-Populate the tables:
-```bash
-python main.py  # uses OUTPUT_MODE or defaults to uploading to BigQuery
+{"CHICAGO_APP_TOKEN": "...", "CHICAGO_SECRET_TOKEN": "...", "CTA_TRAIN_API_KEY": "...",
+ "CTA_BUS_API_KEY": "...", "METRA_API_TOKEN": "..."}
 ```
 
-## Streamlit (hostable)
-Live map + simple analytics from BigQuery (in `frontend/app.py`):
+The schedule is the `_SCHEDULE` substitution in `cloudbuild.yaml` (default every 5 minutes).
+The dataset is created automatically on the first run.
+Note BigQuery allows 1,500 load jobs per table per day: running more often than once a minute exceeds that.
+
+## Web app
+
+`server/` is a small FastAPI service over the BigQuery tables (results cached for 60 s):
+
+| Endpoint | Returns |
+|---|---|
+| `GET /api/summary` | Freshness, KPIs, % of trains delayed per line and the worst bus routes, from the latest snapshot |
+| `GET /api/positions?minutes=60` | Every vehicle position per ETL snapshot (oldest first, max 180 min), used for animation |
+| `GET /api/delay-history?window=24h` | Delayed vs. total trains per line over `6h`, `24h` or `7d` |
+| `GET /api/meta` | Line colors and refresh interval |
+
+`web/` is a Vite + React + TypeScript app that draws everything with [Vega-Lite](https://vega.github.io/vega-lite/)
+(via `vega-embed`): the map is a Vega `geoshape` of Chicago's community areas and CTA track
+(`web/public/geo/`, simplified from the City of Chicago data portal) with vehicles as a live dataset on top.
+
+The ETL only records a snapshot every few minutes, so the motion is interpolated: in **Live** mode vehicles glide to
+their new positions whenever a refresh lands, and **Replay** plays back the last 30 min to 3 h at 30-300x, with a
+scrubber. Vehicles are matched across snapshots by run number (trains) or vehicle id (buses, Metra) and only glide
+between snapshots less than 15 minutes apart. Animation honors `prefers-reduced-motion`.
+
+In production one container serves both: `Dockerfile.web` builds the frontend and runs `uvicorn server.app:app`,
+which also serves `web/dist`. The service account needs `roles/bigquery.dataViewer` and `roles/bigquery.jobUser`.
+
 ```bash
-streamlit run frontend/app.py --server.port 8501 --server.address 0.0.0.0
+docker build -f Dockerfile.web -t us-central1-docker.pkg.dev/$P/chicago-transit/web .
+docker push us-central1-docker.pkg.dev/$P/chicago-transit/web
+gcloud run deploy chicago-transit-web --region=$R --image=us-central1-docker.pkg.dev/$P/chicago-transit/web \
+  --service-account=chicago-transit-web@$P.iam.gserviceaccount.com --set-env-vars=BQ_PROJECT_ID=$P
 ```
-Environment: `GOOGLE_APPLICATION_CREDENTIALS`, `BQ_PROJECT_ID`, optional `BQ_DATASET`, `STREAMLIT_REFRESH_MS` (default 15000), `STREAMLIT_ROW_LIMIT` (default 1200).
-This auto-refreshes the page on a timer; adjust `STREAMLIT_REFRESH_MS` to tune polling. Use sidebar toggles to show/hide CTA trains, buses, and Metra layers. Metrics summarize counts and delayed percentages per route.
+
+The API warns if the newest data is more than 15 minutes old. `REFRESH_MS` (default 60000) sets how often the browser polls.

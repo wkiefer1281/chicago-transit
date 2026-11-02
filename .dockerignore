@@ -2,12 +2,14 @@
 .venv
 .git
 frontend
+tests
+src
 __pycache__
 *.pyc
-*.pyo
-*.pyd
-*.sqlite3
+*.json
 .pytest_cache
 .mypy_cache
 .ruff_cache
 *.log
+web
+server
